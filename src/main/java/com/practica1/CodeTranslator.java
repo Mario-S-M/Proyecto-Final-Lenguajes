@@ -27,8 +27,13 @@ public class CodeTranslator {
 
     private String translateToPython() {
         StringBuilder code = new StringBuilder();
+        // Agregar docstring al inicio del archivo Python
+        code.append("\"\"\"Código traducido desde ALMA a Python\"\"\"\n\n");
         for (LanguageCustomVisitor.Statement stmt : statements) {
-            code.append(translateStatementToPython(stmt, 0)).append("\n");
+            String translatedStmt = translateStatementToPython(stmt, 0);
+            if (!translatedStmt.trim().isEmpty()) {
+                code.append(translatedStmt).append("\n");
+            }
         }
         return code.toString();
     }

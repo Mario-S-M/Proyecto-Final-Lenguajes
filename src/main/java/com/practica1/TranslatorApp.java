@@ -39,10 +39,18 @@ public class TranslatorApp {
         JButton importButton = new JButton("Importar");
         JButton executeButton = new JButton("Ejecutar");
         JButton translateButton = new JButton("Traducir");
+        JButton executeTranslationButton = new JButton("Ejecutar Traducción");
         JButton exportButton = new JButton("Exportar Traducción");
         JButton exportOutputButton = new JButton("Exportar ALMA");
         languageSelector = new JComboBox<>(new String[] { "Python", "Java", "Assembly" });
         languageSelector.setSelectedItem("Python");
+
+        // Estilo para el botón de ejecutar traducción
+        executeTranslationButton.setBackground(new Color(76, 175, 80));
+        executeTranslationButton.setForeground(Color.WHITE);
+        executeTranslationButton.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        executeTranslationButton.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        executeTranslationButton.setFocusPainted(false);
 
         // Estilo para el nuevo botón
         exportOutputButton.setBackground(new Color(63, 81, 181));
@@ -69,6 +77,7 @@ public class TranslatorApp {
         buttonBar.add(importButton);
         buttonBar.add(executeButton);
         buttonBar.add(translateButton);
+        buttonBar.add(executeTranslationButton);
         buttonBar.add(languageSelector);
         buttonBar.add(exportButton);
         buttonBar.add(exportOutputButton);
@@ -171,6 +180,7 @@ public class TranslatorApp {
         importButton.addActionListener(e -> importCode());
         executeButton.addActionListener(e -> executeCode());
         translateButton.addActionListener(e -> translateCode());
+        executeTranslationButton.addActionListener(e -> executeTranslation());
         exportButton.addActionListener(e -> exportCode());
         exportOutputButton.addActionListener(e -> exportOriginalCode());
 
@@ -334,6 +344,147 @@ public class TranslatorApp {
             consoleArea.setText("Error al exportar el código ALMA: " + ex.getMessage());
             ex.printStackTrace();
         }
+    }
+
+    private void executeTranslation() {
+        try {
+            // Primero traducir
+            translateCode();
+            
+            // Obtener el código traducido y formatear si es Python
+            String translatedCode = outputArea.getText();
+            String targetLanguage = (String) languageSelector.getSelectedItem();
+            
+            if (targetLanguage.equals("Python")) {
+                translatedCode = formatPythonCode(translatedCode);
+            } else if (targetLanguage.equals("Java")) {
+                // Asegurarnos de que el código Java tenga una clase pública con el nombre correcto
+                translatedCode = formatJavaCode(translatedCode);
+            }
+            
+            // Crear un archivo temporal para el código traducido
+            File tempFile = File.createTempFile("Main", getFileExtension(targetLanguage));
+            Files.writeString(tempFile.toPath(), translatedCode);
+            
+            // Preparar el proceso según el lenguaje
+            ProcessBuilder processBuilder = new ProcessBuilder();
+            processBuilder.redirectErrorStream(true);
+            
+            switch (targetLanguage) {
+                case "Python":
+                    processBuilder.command("python", tempFile.getAbsolutePath());
+                    break;
+                    
+                case "Java":
+                    // Compilar primero
+                    ProcessBuilder compileBuilder = new ProcessBuilder(
+                        "javac", tempFile.getAbsolutePath()
+                    );
+                    Process compileProcess = compileBuilder.start();
+                    
+                    // Leer errores de compilación si los hay
+                    try (var reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(compileProcess.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            consoleArea.append(line + "\n");
+                        }
+                    }
+                    
+                    int compileResult = compileProcess.waitFor();
+                    if (compileResult != 0) {
+                        consoleArea.append("Error al compilar el código Java\n");
+                        return;
+                    }
+                    
+                    // Luego ejecutar
+                    processBuilder.command("java", "-cp", tempFile.getParent(), "Main");
+                    break;
+                    
+                case "Assembly":
+                    consoleArea.append("La ejecución directa de código Assembly no está soportada.\n");
+                    return;
+            }
+            
+            // Ejecutar el proceso
+            Process process = processBuilder.start();
+            
+            // Leer la salida del proceso
+            try (var reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                
+                consoleArea.setText("=== Ejecutando código traducido ===\n");
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    consoleArea.append(line + "\n");
+                }
+            }
+            
+            // Esperar a que termine el proceso
+            process.waitFor();
+            consoleArea.append("\n=== Ejecución completada ===\n");
+            
+            // Limpiar archivos temporales
+            tempFile.delete();
+            if (targetLanguage.equals("Java")) {
+                new File(tempFile.getParent(), tempFile.getName().replace(".java", ".class")).delete();
+            }
+            
+        } catch (Exception ex) {
+            consoleArea.append("Error al ejecutar la traducción: " + ex.getMessage() + "\n");
+            ex.printStackTrace();
+        }
+    }
+
+    // Agregar método para formatear código Java
+    private String formatJavaCode(String code) {
+        // Asegurarnos de que la clase sea pública y se llame Main con un método main
+        StringBuilder formattedCode = new StringBuilder();
+        formattedCode.append("public class Main {\n");
+        formattedCode.append("    public static void main(String[] args) {\n");
+        
+        // Formatear el código y corregir todas las ocurrencias de True por true
+        String formattedInnerCode = code.replace(" True ", " true ")
+                                      .replace("(True)", "(true)")
+                                      .replace(" True;", " true;")
+                                      .replace("=True", "=true")
+                                      .replace("for (int i = 0;; True; i++)", "while (true)")
+                                      .replace("\n", "\n        ");
+        
+        formattedCode.append("        ").append(formattedInnerCode);
+        formattedCode.append("\n    }\n");
+        formattedCode.append("}\n");
+        return formattedCode.toString();
+    }
+
+    // Método auxiliar para formatear código Python
+    private String formatPythonCode(String code) {
+        StringBuilder formattedCode = new StringBuilder();
+        String[] lines = code.split("\n");
+        int indentLevel = 0;
+        
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+            
+            // Reducir la indentación para líneas que cierran bloques
+            if (trimmedLine.startsWith("}") || trimmedLine.startsWith("elif") || trimmedLine.startsWith("else:")) {
+                indentLevel = Math.max(0, indentLevel - 1);
+            }
+            
+            // Agregar la indentación correcta
+            if (!trimmedLine.isEmpty()) {
+                formattedCode.append("    ".repeat(indentLevel)).append(trimmedLine).append("\n");
+            } else {
+                formattedCode.append("\n"); // Mantener líneas vacías
+            }
+            
+            // Aumentar la indentación después de líneas que abren bloques
+            if (trimmedLine.endsWith(":")) {
+                indentLevel++;
+            }
+        }
+        
+        return formattedCode.toString();
     }
 
     public static void main(String[] args) {

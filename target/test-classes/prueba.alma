@@ -1,0 +1,5 @@
+AlmaLilia.complete x = 10;
+AlmaLilia.cadena nombre = "Juan";
+AlmaLilia.consola(2);
+AlmaLilia.consola(nombre);
+x = x * 2;

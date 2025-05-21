@@ -2,16 +2,9 @@ AlmaLilia.complete x = 10;
 AlmaLilia.cacho y = 3.5;
 AlmaLilia.pregunta flag = AlmaLilia.verdadero;
 AlmaLilia.cadena nombre = "Juan";
-AlmaLilia.cadena apellido;
 AlmaLilia.consola(2);
 AlmaLilia.consola(nombre);
 AlmaLilia.consola(flag);
-AlmaLilia.si (flag) {
-    x = x + 2;
-    y = y * 1.5;
-    apellido = "Perez";
-    nombre = nombre + " " + apellido;
-}
 x = x * 2;
 nombre = flag ? "Activo" : "Inactivo";
 AlmaLilia.para (AlmaLilia.complete i = 0; i < 10; i++) {
